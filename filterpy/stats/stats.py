@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-"""Copyright 2014 Roger R Labbe Jr.
+"""Copyright 2015 Roger R Labbe Jr.
 
-filterpy library.
+FilterPy library.
 http://github.com/rlabbe/filterpy
 
 Documentation at:
@@ -20,15 +20,17 @@ from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
 import math
-import numpy as np
-import numpy.linalg as linalg
+from math import cos, sin
+from matplotlib.patches import Ellipse
 import matplotlib.pyplot as plt
+import numpy as np
+import random
+import scipy.linalg as linalg
 import scipy.sparse as sp
 import scipy.sparse.linalg as spln
 import scipy.stats
 from scipy.stats import norm
-from matplotlib.patches import Ellipse
-import random
+import warnings
 
 
 def gaussian(x, mean, var):
@@ -54,14 +56,14 @@ def gaussian(x, mean, var):
     probability : float
         probability of x for the Gaussian (mean, var). E.g. 0.101 denotes
         10.1%.
-        
+
     **Examples**
-    
+
     gaussian(8, 1, 2)
     gaussian([8, 7, 9], 1, 2)
     """
 
-    return (np.exp((-0.5*(np.asarray(x)-mean)**2)/var) / 
+    return (np.exp((-0.5*(np.asarray(x)-mean)**2)/var) /
             math.sqrt(2*math.pi*var))
 
 
@@ -131,10 +133,9 @@ def multivariate_gaussian(x, mu, cov):
         probability for x for the Gaussian (mu,cov)
     """
 
-    scipy.stats.multivariate_normal
-    # force all to numpy.array type
-    x   = np.array(x, copy=False, ndmin=1)
-    mu  = np.array(mu,copy=False, ndmin=1)
+    # force all to numpy.array type, and flatten in case they are vectors
+    x   = np.array(x, copy=False, ndmin=1).flatten()
+    mu  = np.array(mu,copy=False, ndmin=1).flatten()
 
     nx = len(mu)
     cov = _to_cov(cov, nx)
@@ -203,21 +204,25 @@ def multivariate_multiply(m1, c1, m2, c2):
 
 
 
-def plot_gaussian(mean, variance,
-                  mean_line=False,
-                  xlim=None,
-                  xlabel=None,
-                  ylabel=None):
-    """ plots the normal distribution with the given mean and variance. x-axis
-    contains the mean, the y-axis shows the probability.
+def plot_discrete_cdf(xs, ys, ax=None, xlabel=None, ylabel=None,
+                      label=None):
+    """Plots a normal distribution CDF with the given mean and variance.
+    x-axis contains the mean, the y-axis shows the cumulative probability.
 
-    **parameters**
+    **Parameters**
 
-    mean_line : boolean
-        draws a line at x=mean
+    xs : list-like of scalars
+        x values corresponding to the values in `y`s. Can be `None`, in which
+        case range(len(ys)) will be used.
 
-    xlim: (float,float), optional
-        specify the limits for the x axis as tuple (low,high).
+    ys : list-like of scalars
+        list of probabilities to be plotted which should sum to 1.
+
+    ax : matplotlib axes object, optional
+        If provided, the axes to draw on, otherwise plt.gca() is used.
+
+    xlim, ylim: (float,float), optional
+        specify the limits for the x or y axis as tuple (low,high).
         If not specified, limits will be automatically chosen to be 'nice'
 
     xlabel : str,optional
@@ -225,27 +230,185 @@ def plot_gaussian(mean, variance,
 
     ylabel : str, optional
         label for the y-axis
+
+    label : str, optional
+        label for the legend
+
+    **Returns**
+        axis of plot
     """
+    if ax is None:
+        ax = plt.gca()
+
+    if xs is None:
+        xs = range(len(ys))
+    ys = np.cumsum(ys)
+    ax.plot(xs, ys, label=label)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    return ax
+
+
+def plot_gaussian_cdf(mean=0., variance=1.,
+                      ax=None,
+                      xlim=None, ylim=(0., 1.),
+                      xlabel=None, ylabel=None,
+                      label=None):
+    """Plots a normal distribution CDF with the given mean and variance.
+    x-axis contains the mean, the y-axis shows the cumulative probability.
+
+    **Parameters**
+
+    mean : scalar, default 0.
+        mean for the normal distribution.
+
+    variance : scalar, default 0.
+        variance for the normal distribution.
+
+    ax : matplotlib axes object, optional
+        If provided, the axes to draw on, otherwise plt.gca() is used.
+
+    xlim, ylim: (float,float), optional
+        specify the limits for the x or y axis as tuple (low,high).
+        If not specified, limits will be automatically chosen to be 'nice'
+
+    xlabel : str,optional
+        label for the x-axis
+
+    ylabel : str, optional
+        label for the y-axis
+
+    label : str, optional
+        label for the legend
+
+    **Returns**
+        axis of plot
+    """
+    if ax is None:
+        ax = plt.gca()
+
+    sigma = math.sqrt(variance)
+    n = scipy.stats.norm(mean, sigma)
+    if xlim is None:
+        xlim = [n.ppf(0.001), n.ppf(0.999)]
+
+    xs = np.arange(xlim[0], xlim[1], (xlim[1] - xlim[0]) / 1000.)
+    cdf = n.cdf(xs)
+    ax.plot(xs, cdf, label=label)
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    return ax
+
+
+
+def plot_gaussian_pdf(mean=0., variance=1.,
+                      ax=None,
+                      mean_line=False,
+                      xlim=None, ylim=None,
+                      xlabel=None, ylabel=None,
+                      label=None):
+    """Plots a normal distribution PDF with the given mean and variance.
+    x-axis contains the mean, the y-axis shows the probability density.
+
+    **Parameters**
+
+    mean : scalar, default 0.
+        mean for the normal distribution.
+
+    variance : scalar, default 0.
+        variance for the normal distribution.
+
+    ax : matplotlib axes object, optional
+        If provided, the axes to draw on, otherwise plt.gca() is used.
+
+    mean_line : boolean
+        draws a line at x=mean
+
+    xlim, ylim: (float,float), optional
+        specify the limits for the x or y axis as tuple (low,high).
+        If not specified, limits will be automatically chosen to be 'nice'
+
+    xlabel : str,optional
+        label for the x-axis
+
+    ylabel : str, optional
+        label for the y-axis
+
+    label : str, optional
+        label for the legend
+
+    **Returns**
+        axis of plot
+    """
+
+    if ax is None:
+        ax = plt.gca()
 
     sigma = math.sqrt(variance)
     n = scipy.stats.norm(mean, sigma)
 
     if xlim is None:
-        min_x = n.ppf(0.001)
-        max_x = n.ppf(0.999)
-    else:
-        min_x = xlim[0]
-        max_x = xlim[1]
-    xs = np.arange(min_x, max_x, (max_x - min_x) / 1000)
-    plt.plot(xs,n.pdf(xs))
-    plt.xlim((min_x, max_x))
+        xlim = [n.ppf(0.001), n.ppf(0.999)]
+
+    xs = np.arange(xlim[0], xlim[1], (xlim[1] - xlim[0]) / 1000.)
+    ax.plot(xs,n.pdf(xs), label=label)
+    ax.set_xlim(xlim)
+
+    if ylim is not None:
+        ax.set_ylim(ylim)
 
     if mean_line:
         plt.axvline(mean)
-    if xlabel:
-       plt.xlabel(xlabel)
-    if ylabel:
-       plt.ylabel(ylabel)
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    return ax
+
+
+def plot_gaussian(mean=0., variance=1.,
+                  ax=None,
+                  mean_line=False,
+                  xlim=None,
+                  ylim=None,
+                  xlabel=None,
+                  ylabel=None,
+                  label=None):
+    """ DEPRECATED. Use plot_gaussian_pdf() instead. This is poorly named, as
+    there are multiple ways to plot a Gaussian.
+
+    Plots a normal distribution PDF with the given mean and variance.
+    x-axis contains the mean, the y-axis shows the probability density.
+
+    **Parameters**
+
+    ax : matplotlib axes object, optional
+        If provided, the axes to draw on, otherwise plt.gca() is used.
+
+    mean_line : boolean
+        draws a line at x=mean
+
+    xlim, ylim: (float,float), optional
+        specify the limits for the x or y axis as tuple (low,high).
+        If not specified, limits will be automatically chosen to be 'nice'
+
+    xlabel : str,optional
+        label for the x-axis
+
+    ylabel : str, optional
+        label for the y-axis
+
+    label : str, optional
+        label for the legend
+    """
+
+    warnings.warn('This function is deprecated. It is poorly named. '
+                  'A Gaussian can be plotted as a PDF or CDF. This '
+                  'plots a PDF. Use plot_gaussian_pdf() instead,',
+                  DeprecationWarning)
+    return plot_gaussian_pdf(mean, variance, ax, mean_line, xlim, ylim, xlabel,
+                             ylabel, label)
 
 
 def covariance_ellipse(P, deviations=1):
@@ -272,20 +435,22 @@ def covariance_ellipse(P, deviations=1):
     return (orientation, width, height)
 
 
-def plot_covariance_ellipse(mean, cov=None,
-            variance = 1.0, std=None,
-             ellipse=None, title=None, axis_equal=True,
-             facecolor='none', edgecolor='#004080',
-             alpha=1.0, xlim=None, ylim=None):
+def plot_covariance_ellipse(mean, cov=None, variance = 1.0, std=None,
+             ellipse=None, title=None, axis_equal=True, show_semiaxis=False,
+             facecolor=None, edgecolor=None,
+             fc='none', ec='#004080',
+             alpha=1.0, xlim=None, ylim=None,
+             ls='solid'):
     """ plots the covariance ellipse where
 
     mean is a (x,y) tuple for the mean of the covariance (center of ellipse)
 
     cov is a 2x2 covariance matrix.
 
-    variance is the normal sigma^2 that we want to plot. If list-like,
+    `variance` is the normal sigma^2 that we want to plot. If list-like,
     ellipses for all ellipses will be ploted. E.g. [1,2] will plot the
-    sigma^2 = 1 and sigma^2 = 2 ellipses.
+    sigma^2 = 1 and sigma^2 = 2 ellipses. Alternatively, use std for the
+    standard deviation, in which case `variance` will be ignored.
 
     ellipse is a (angle,width,height) tuple containing the angle in radians,
     and width and height radii.
@@ -299,15 +464,21 @@ def plot_covariance_ellipse(mean, cov=None,
     assert cov is None or ellipse is None
     assert not (cov is None and ellipse is None)
 
+    if facecolor is None:
+        facecolor = fc
+
+    if edgecolor is None:
+        edgecolor = ec
+
     if cov is not None:
         ellipse = covariance_ellipse(cov)
 
     if axis_equal:
+        #plt.gca().set_aspect('equal')
         plt.axis('equal')
 
     if title is not None:
         plt.title (title)
-
 
     compute_std = False
     if std is None:
@@ -332,14 +503,21 @@ def plot_covariance_ellipse(mean, cov=None,
                     facecolor=facecolor,
                     edgecolor=edgecolor,
                     alpha=alpha,
-                    lw=2)
+                    lw=2, ls=ls)
         ax.add_patch(e)
-    plt.scatter(mean[0], mean[1], marker='+') # mark the center
+    x, y = mean
+    plt.scatter(x, y, marker='+', color=edgecolor) # mark the center
     if xlim is not None:
         ax.set_xlim(xlim)
 
     if ylim is not None:
         ax.set_ylim(ylim)
+
+    if show_semiaxis:
+        a = ellipse[0]
+        h, w = height/4, width/4
+        plt.plot([x, x+ h*cos(a+np.pi/2)], [y, y + h*sin(a+np.pi/2)])
+        plt.plot([x, x+ w*cos(a)], [y, y + w*sin(a)])
 
 
 def norm_cdf (x_range, mu, var=1, std=None):
@@ -449,8 +627,59 @@ def rand_student_t(df, mu=0, std=1):
     return x / (math.sqrt(y/df)) + mu
 
 
+def NESS(xs, est_xs, ps):
+    """ Computes the normalized estimated error squared test on a sequence
+    of estimates. The estimates are optimal if the mean error is zero and
+    the covariance matches the Kalman filter's covariance. If this holds,
+    then the mean of the NESS should be equal to or less than the dimension
+    of x.
+
+    **Example**
+
+    xs = ground_truth()
+    est_xs, ps, _, _ = kf.batch_filter(zs)
+    NESS(xs, est_xs, ps)
+
+    **Parameters**
+
+    xs : list-like
+        sequence of true values for the state x
+
+    est_xs : list-like
+        sequence of estimates from an estimator (such as Kalman filter)
+
+    ps : list-like
+        sequence of covariance matrices from the estimator
+
+    **Returns**
+
+    ness : list of floats
+       list of NESS computed for each estimate
+
+    """
+
+    est_err = xs - est_xs
+    ness = []
+    for x, p in zip(est_err, ps):
+        ness.append(np.dot(x.T, linalg.inv(p)).dot(x))
+    return ness
+
+
 if __name__ == '__main__':
-    plot_std_vs_var()
+
+    ax = plot_gaussian_pdf(2, 3)
+    plot_gaussian_cdf(2, 3, ax=ax)
+    plt.show()
+
+    ys =np.abs(np.random.randn(100))
+    ys /= np.sum(ys)
+    plot_discrete_cdf(xs=None, ys=ys)
+
+
+    #P1 = [[2, 1.9], [1.9, 2]]
+    #plot_covariance_ellipse((10, 10), P1, facecolor='y', alpha=0.6)
+
+    """plot_std_vs_var()
     plt.figure()
 
     _do_plot_test()
@@ -475,7 +704,9 @@ if __name__ == '__main__':
 
     plt.figure()
     P = np.array([[2,0],[0,2]])
-    plot_covariance_ellipse((2,7), cov=cov, variance=[1,2], facecolor='g', title='my title', alpha=.2)
+    plot_covariance_ellipse((2,7), cov=cov, variance=[1,2], facecolor='g',
+                            title='my title', alpha=.2, ls='dashed')
     plt.show()
 
     print("all tests passed")
+    """

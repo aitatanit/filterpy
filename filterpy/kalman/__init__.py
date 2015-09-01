@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Copyright 2014 Roger R Labbe Jr.
+"""Copyright 2015 Roger R Labbe Jr.
 
-filterpy library.
+FilterPy library.
 http://github.com/rlabbe/filterpy
 
 Documentation at:
@@ -17,12 +17,15 @@ for more information.
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
-from .kalman_filter import *
-from .ensemble_kalman_filter import *
-from .square_root import *
-from .information_filter import *
 from .EKF import *
-from .UKF import *
-from .SUKF import *
+from .ensemble_kalman_filter import *
 from .fading_memory import *
 from .fixed_lag_smoother import FixedLagSmoother
+from .kalman_filter import *
+from .imm import *
+from .unscented_transform import unscented_transform
+from .information_filter import *
+from .mmae import *
+from .sigma_points import *
+from .square_root import *
+from .UKF import *

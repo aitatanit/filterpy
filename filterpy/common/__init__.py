@@ -1,6 +1,6 @@
-"""Copyright 2014 Roger R Labbe Jr.
+"""Copyright 2015 Roger R Labbe Jr.
 
-filterpy library.
+FilterPy library.
 http://github.com/rlabbe/filterpy
 
 Documentation at:
@@ -15,9 +15,9 @@ for more information.
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
-__all__=["helpers", "discretization", "stats"]
+__all__=["helpers", "discretization"]
 
 from .helpers import *
 from .discretization import *
-from .stats import *
+
 

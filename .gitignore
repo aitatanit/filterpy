@@ -1,6 +1,13 @@
 *.pyc
+*.tex
+*.toc
+*.aux
+*.out
+book_files/
 dist/
 *egg-info*
 _build/
 _static
-_templates
+_templatesq
+quadrature.py
+.settings/

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-"""Copyright 2014 Roger R Labbe Jr.
+"""Copyright 2015 Roger R Labbe Jr.
 
-filterpy library.
+FilterPy library.
 http://github.com/rlabbe/filterpy
 
 Documentation at:
@@ -17,11 +17,11 @@ for more information.
 
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
-import numpy as np
-import scipy.linalg as linalg
-from numpy import dot, zeros, eye, isscalar
 from filterpy.common import setter, setter_1d, setter_scalar, dot3
-
+import numpy as np
+from numpy import dot, zeros, eye, isscalar
+import scipy.linalg as linalg
+from scipy.stats import multivariate_normal
 
 
 class KalmanFilter(object):
@@ -71,6 +71,13 @@ class KalmanFilter(object):
     S :  numpy.array
         Systen uncertaintly projected to measurement space
 
+    likelihood : scalar
+        Likelihood of last measurment update.
+
+    log_likelihood : scalar
+        Log likelihood of last measurment update.
+
+
     """
 
 
@@ -114,13 +121,14 @@ class KalmanFilter(object):
         self.H = 0                 # Measurement function
         self.R = eye(dim_z)        # state uncertainty
         self._alpha_sq = 1.        # fading memory control
+        self.M = 0                 # process-measurement cross correlation
 
         # gain and residual are computed during the innovation step. We
         # save them so that in case you want to inspect them for various
         # purposes
         self._K = 0 # kalman gain
         self._y = zeros((dim_z, 1))
-        self._S = 0 # system uncertainty in measurement space
+        self._S = np.zeros((dim_z, dim_z)) # system uncertainty
 
         # identity matrix. Do not alter this.
         self._I = np.eye(dim_x)
@@ -128,7 +136,7 @@ class KalmanFilter(object):
 
     def update(self, z, R=None, H=None):
         """
-        Add a new measurement (z) to the kalman filter. If z is None, nothing
+        Add a new measurement (z) to the Kalman filter. If z is None, nothing
         is changed.
 
         **Parameters**
@@ -139,6 +147,11 @@ class KalmanFilter(object):
         R : np.array, scalar, or None
             Optionally provide R to override the measurement noise for this
             one call, otherwise  self.R will be used.
+
+        H : np.array,  or None
+            Optionally provide H to override the measurement function for this
+            one call, otherwise  self.H will be used.
+
         """
 
         if z is None:
@@ -163,6 +176,12 @@ class KalmanFilter(object):
         # project system uncertainty into measurement space
         S = dot3(H, P, H.T) + R
 
+        mean = np.array(dot(H, x)).flatten()
+        flatz = np.array(z).flatten()
+
+        self.likelihood = multivariate_normal.pdf(flatz, mean, cov=S, allow_singular=True)
+        self.log_likelihood = multivariate_normal.logpdf(flatz, mean, cov=S, allow_singular=True)
+
         # K = PH'inv(S)
         # map system uncertainty into kalman gain
         K = dot3(P, H.T, linalg.inv(S))
@@ -174,6 +193,70 @@ class KalmanFilter(object):
         # P = (I-KH)P(I-KH)' + KRK'
         I_KH = self._I - dot(K, H)
         self._P = dot3(I_KH, P, I_KH.T) + dot3(K, R, K.T)
+
+        self._S = S
+        self._K = K
+
+
+
+    def update_correlated(self, z, R=None, H=None):
+        """ Add a new measurement (z) to the Kalman filter assuming that
+        process noise and measurement noise are correlated as defined in
+        the `self.M` matrix.
+
+        If z is None, nothing is changed.
+
+        **Parameters**
+
+        z : np.array
+            measurement for this update.
+
+        R : np.array, scalar, or None
+            Optionally provide R to override the measurement noise for this
+            one call, otherwise  self.R will be used.
+
+        H : np.array,  or None
+            Optionally provide H to override the measurement function for this
+            one call, otherwise  self.H will be used.
+
+        """
+
+        if z is None:
+            return
+
+        if R is None:
+            R = self.R
+        elif isscalar(R):
+            R = eye(self.dim_z) * R
+
+        # rename for readability and a tiny extra bit of speed
+        if H is None:
+            H = self.H
+        x = self._x
+        P = self._P
+        M = self.M
+
+        # y = z - Hx
+        # error (residual) between measurement and prediction
+        self._y = z - dot(H, x)
+
+        # project system uncertainty into measurement space
+        S = dot3(H, P, H.T) + dot(H, M) + dot(M.T, H.T) + R
+
+        mean = np.array(dot(H, x)).flatten()
+        flatz = np.array(z).flatten()
+
+        self.likelihood = multivariate_normal.pdf(flatz, mean, cov=S, allow_singular=True)
+        self.log_likelihood = multivariate_normal.logpdf(flatz, mean, cov=S, allow_singular=True)
+
+        # K = PH'inv(S)
+        # map system uncertainty into kalman gain
+        K = dot(dot(P, H.T) + M, linalg.inv(S))
+
+        # x = x + Ky
+        # predict new x with residual scaled by the kalman gain
+        self._x = x + dot(K, self._y)
+        self._P = P - dot(K, dot(H, P) + M.T)
 
         self._S = S
         self._K = K
@@ -204,7 +287,8 @@ class KalmanFilter(object):
 
 
     def predict(self, u=0):
-        """ Predict next position.
+        """ Predict next position using the Kalman filter state propagation
+        equations.
 
         **Parameters**
 
@@ -259,19 +343,6 @@ class KalmanFilter(object):
             array of the covariances for each time step after the prediction.
             In other words `covariance[k,:,:]` is the covariance at step `k`.
         """
-
-        try:
-            z = zs[0]
-        except:
-            assert not isscalar(zs), 'zs must be list-like'
-
-        if self.dim_z == 1:
-            assert isscalar(z) or (z.ndim==1 and len(z) == 1), \
-            'zs must be a list of scalars or 1D, 1 element arrays'
-
-        else:
-            assert len(z) == self.dim_z, 'each element in zs must be a'
-            '1D array of length {}'.format(self.dim_z)
 
         n = np.size(zs,0)
         if Rs is None:
@@ -430,7 +501,7 @@ class KalmanFilter(object):
 
         ** References **
 
-        [1] Dan Simon. "Optimal State Estimation." John Wiley & Sons. 
+        [1] Dan Simon. "Optimal State Estimation." John Wiley & Sons.
             p. 208-212. (2006)
         """
 
@@ -483,8 +554,12 @@ class KalmanFilter(object):
 
     @B.setter
     def B(self, value):
+        self._B = value
         """ control transition matrix"""
-        self._B = setter (value, self.dim_x, self.dim_u)
+        if np.isscalar(value):
+            self._B = value
+        else:
+            self._B = setter (value, self.dim_x, self.dim_u)
 
 
     @property
@@ -513,4 +588,3 @@ class KalmanFilter(object):
     def S(self):
         """ system uncertainty in measurement space """
         return self._S
-
