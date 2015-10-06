@@ -1,6 +1,10 @@
 FilterPy - Kalman filters and other optimal and non-optimal estimation filters in Python.
 -----------------------------------------------------------------------------------------
 
+.. image:: https://img.shields.io/pypi/v/filterpy.svg
+        :target: https://pypi.python.org/pypi/filterpy
+
+
 This library provides Kalman filtering and various related optimal and
 non-optimal filtering software written in Python. It contains Kalman
 filters, Extended Kalman filters, Unscented Kalman filters, Kalman
@@ -47,7 +51,9 @@ version, however.
 
 Installation
 ------------
-
+.. image:: https://img.shields.io/pypi/v/filterpy.svg
+        :target: https://pypi.python.org/pypi/filterpy
+        
 ::
 
     pip install filterpy
