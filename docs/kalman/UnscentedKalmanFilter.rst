@@ -27,7 +27,6 @@ This implements the unscented Kalman filter.
     .. automethod:: __init__
 
 
-
 --------
 
 
@@ -37,3 +36,10 @@ This implements the unscented Kalman filter.
     .. automethod:: __init__
 
 
+--------
+
+
+.. autoclass:: SimplexSigmaPoints
+    :members:
+
+    .. automethod:: __init__

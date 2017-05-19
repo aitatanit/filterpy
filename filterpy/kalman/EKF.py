@@ -30,7 +30,8 @@ class ExtendedKalmanFilter(object):
         various state variables to reasonable values; the defaults below will
         not give you a functional filter.
 
-        **Parameters**
+        Parameters
+        ----------
 
         dim_x : int
             Number of state variables for the Kalman filter. For example, if
@@ -46,6 +47,7 @@ class ExtendedKalmanFilter(object):
 
         self.dim_x = dim_x
         self.dim_z = dim_z
+        self.dim_u = dim_u
 
         self._x = zeros((dim_x,1)) # state
         self._P = eye(dim_x)       # uncertainty covariance
@@ -63,7 +65,8 @@ class ExtendedKalmanFilter(object):
         """ Performs the predict/update innovation of the extended Kalman
         filter.
 
-        **Parameters**
+        Parameters
+        ----------
 
         z : np.array
             measurement for this step.
@@ -84,7 +87,7 @@ class ExtendedKalmanFilter(object):
             variable.
 
         hx_args : tuple, optional, default (,)
-            arguments to be passed into HJacobian after the required state
+            arguments to be passed into Hx after the required state
             variable.
 
         u : np.array or scalar
@@ -127,7 +130,8 @@ class ExtendedKalmanFilter(object):
                residual=np.subtract):
         """ Performs the update innovation of the extended Kalman filter.
 
-        **Parameters**
+        Parameters
+        ----------
 
         z : np.array
             measurement for this step.
@@ -207,7 +211,8 @@ class ExtendedKalmanFilter(object):
     def predict(self, u=0):
         """ Predict next position.
 
-        **Parameters**
+        Parameters
+        ----------
 
         u : np.array
             Optional control vector. If non-zero, it is multiplied by B
@@ -220,23 +225,25 @@ class ExtendedKalmanFilter(object):
 
     @property
     def Q(self):
-        """ Process uncertainty"""
+        """ Process uncertainty matrix"""
         return self._Q
 
 
     @Q.setter
     def Q(self, value):
+        """ Process uncertainty matrix"""
         self._Q = setter_scalar(value, self.dim_x)
 
 
     @property
     def P(self):
-        """ covariance matrix"""
+        """ state covariance matrix"""
         return self._P
 
 
     @P.setter
     def P(self, value):
+        """ state covariance matrix"""
         self._P = setter_scalar(value, self.dim_x)
 
 
@@ -248,21 +255,25 @@ class ExtendedKalmanFilter(object):
 
     @R.setter
     def R(self, value):
+        """ measurement uncertainty"""
         self._R = setter_scalar(value, self.dim_z)
 
 
     @property
     def F(self):
+        """State Transition matrix"""
         return self._F
 
 
     @F.setter
     def F(self, value):
+        """State Transition matrix"""
         self._F = setter(value, self.dim_x, self.dim_x)
 
 
     @property
     def B(self):
+        """ control transition matrix"""
         return self._B
 
 
@@ -274,10 +285,12 @@ class ExtendedKalmanFilter(object):
 
     @property
     def x(self):
+        """ state estimate vector """
         return self._x
 
     @x.setter
     def x(self, value):
+        """ state estimate vector """
         self._x = setter_1d(value, self.dim_x)
 
     @property

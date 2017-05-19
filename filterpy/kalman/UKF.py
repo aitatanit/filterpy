@@ -19,10 +19,11 @@ from __future__ import (absolute_import, division, print_function,
 
 from filterpy.common import dot3
 from filterpy.kalman import unscented_transform
+from filterpy.stats import logpdf
+import math
 import numpy as np
 from numpy import eye, zeros, dot, isscalar, outer
 from scipy.linalg import inv, cholesky
-
 
 class UnscentedKalmanFilter(object):
     # pylint: disable=too-many-instance-attributes
@@ -35,7 +36,8 @@ class UnscentedKalmanFilter(object):
     You will have to set the following attributes after constructing this
     object for the filter to perform properly.
 
-    **Attributes**
+    Attributes
+    ----------
 
     x : numpy.array(dim_x)
         state estimate vector
@@ -52,16 +54,31 @@ class UnscentedKalmanFilter(object):
 
     You may read the following attributes.
 
-    **Readable Attributes**
-
-    xp : numpy.array(dim_x)
-        predicted state (result of predict())
-
-    Pp : numpy.array(dim_x, dim_x)
-        predicted covariance matrix (result of predict())
+    Readable Attributes
+    -------------------
 
 
-    **References**
+    K : numpy.array
+        Kalman gain
+
+    y : numpy.array
+        innovation residual
+
+    x : numpy.array(dim_x)
+        predicted/updated state (result of predict()/update())
+
+    P : numpy.array(dim_x, dim_x)
+        predicted/updated covariance matrix (result of predict()/update())
+
+    likelihood : scalar
+        Likelihood of last measurement update.
+
+    log_likelihood : scalar
+        Log likelihood of last measurement update.
+
+
+    References
+    ----------
 
     .. [1] Julier, Simon J. "The scaled unscented transformation,"
         American Control Converence, 2002, pp 4555-4559, vol 6.
@@ -86,7 +103,8 @@ class UnscentedKalmanFilter(object):
         various state variables to reasonable values; the defaults below will
         not give you a functional filter.
 
-        **Parameters**
+        Parameters
+        ----------
 
         dim_x : int
             Number of state variables for the filter. For example, if
@@ -176,7 +194,9 @@ class UnscentedKalmanFilter(object):
                         y = 2*np.pi
                     return y
 
-        **References**
+
+        References
+        ----------
 
         .. [3] S. Julier, J. Uhlmann, and H. Durrant-Whyte. "A new method for
                the nonlinear transformation of means and covariances in filters
@@ -202,13 +222,14 @@ class UnscentedKalmanFilter(object):
         self.P = eye(dim_x)
         self._dim_x = dim_x
         self._dim_z = dim_z
+        self.points_fn = points
         self._dt = dt
-        self._num_sigmas = 2*dim_x + 1
+        self._num_sigmas = points.num_sigmas()
         self.hx = hx
         self.fx = fx
-        self.points_fn = points
         self.x_mean = x_mean_fn
         self.z_mean = z_mean_fn
+        self.log_likelihood = 0.0
 
         if sqrt_fn is None:
             self.msqrt = cholesky
@@ -230,9 +251,9 @@ class UnscentedKalmanFilter(object):
 
         # sigma points transformed through f(x) and h(x)
         # variables for efficiency so we don't recreate every update
-        self.sigmas_f = zeros((2*self._dim_x+1, self._dim_x))
-        self.sigmas_h = zeros((self._num_sigmas, self._dim_z))
 
+        self.sigmas_f = zeros((self._num_sigmas, self._dim_x))
+        self.sigmas_h = zeros((self._num_sigmas, self._dim_z))
 
 
     def predict(self, dt=None,  UT=None, fx_args=()):
@@ -242,7 +263,8 @@ class UnscentedKalmanFilter(object):
         Important: this MUST be called before update() is called for the first
         time.
 
-        **Parameters**
+        Parameters
+        ----------
 
         dt : double, optional
             If specified, the time step to be used for this prediction.
@@ -257,8 +279,8 @@ class UnscentedKalmanFilter(object):
         fx_args : tuple, optional, default (,)
             optional arguments to be passed into fx() after the required state
             variable.
-
         """
+
         if dt is None:
             dt = self._dt
 
@@ -282,7 +304,8 @@ class UnscentedKalmanFilter(object):
         """ Update the UKF with the given measurements. On return,
         self.x and self.P contain the new mean and covariance of the filter.
 
-        **Parameters**
+        Parameters
+        ----------
 
         z : numpy.array of shape (dim_z)
             measurement vector
@@ -329,17 +352,35 @@ class UnscentedKalmanFilter(object):
             dz =  self.residual_z(self.sigmas_h[i], zp)
             Pxz += self.Wc[i] * outer(dx, dz)
 
-        K = dot(Pxz, inv(Pz))   # Kalman gain
-        y = self.residual_z(z, zp)   #residual
-        self.x = self.x + dot(K, y)
-        self.P = self.P - dot3(K, Pz, K.T)
+
+        self.K = dot(Pxz, inv(Pz))        # Kalman gain
+        self.y = self.residual_z(z, zp)   # residual
+
+        self.x = self.x + dot(self.K, self.y)
+        self.P = self.P - dot3(self.K, Pz, self.K.T)
+
+        self.log_likelihood = logpdf(self.y, np.zeros(len(self.y)), Pz)
 
 
-    def batch_filter(self, zs, Rs=None, residual=None, UT=None):
+    def cross_variance(self, x, z, sigmas_f, sigmas_h):
+        Pxz = zeros((sigmas_f.shape[1], sigmas_h.shape[1]))
+        N = sigmas_f.shape[0]
+        for i in range(N):
+            dx = self.residual_x(sigmas_f[i], x)
+            dz =  self.residual_z(sigmas_h[i], z)
+            Pxz += self.Wc[i] * outer(dx, dz)
+
+
+    @property
+    def likelihood(self):
+        return math.exp(self.log_likelihood)
+
+
+    def batch_filter(self, zs, Rs=None, UT=None):
         """ Performs the UKF filter over the list of measurement in `zs`.
 
-
-        **Parameters**
+        Parameters
+        ----------
 
         zs : list-like
             list of measurements at each time step `self._dt` Missing
@@ -350,20 +391,14 @@ class UnscentedKalmanFilter(object):
             covariance; a value of None in any position will cause the filter
             to use `self.R` for that time step.
 
-        residual : function (z, z2), optional
-            Optional function that computes the residual (difference) between
-            the two measurement vectors. If you do not provide this, then the
-            built in minus operator will be used. You will normally want to use
-            the built in unless your residual computation is nonlinear (for
-            example, if they are angles)
-
         UT : function(sigmas, Wm, Wc, noise_cov), optional
             Optional function to compute the unscented transform for the sigma
             points passed through hx. Typically the default function will
             work - you can use x_mean_fn and z_mean_fn to alter the behavior
             of the unscented transform.
 
-        **Returns**
+        Returns
+        -------
 
         means: ndarray((n,dim_x,1))
             array of the state for each time step after the update. Each entry
@@ -373,7 +408,6 @@ class UnscentedKalmanFilter(object):
         covariance: ndarray((n,dim_x,dim_x))
             array of the covariances for each time step after the update.
             In other words `covariance[k,:,:]` is the covariance at step `k`.
-
         """
 
         try:
@@ -389,10 +423,6 @@ class UnscentedKalmanFilter(object):
             assert len(z) == self._dim_z, 'each element in zs must be a' \
             '1D array of length {}'.format(self._dim_z)
 
-
-        if residual is None:
-            residual = np.subtract
-
         z_n = np.size(zs, 0)
         if Rs is None:
             Rs = [None] * z_n
@@ -407,8 +437,8 @@ class UnscentedKalmanFilter(object):
         covariances = zeros((z_n, self._dim_x, self._dim_x))
 
         for i, (z, r) in enumerate(zip(zs, Rs)):
-            self.predict()
-            self.update(z, r)
+            self.predict(UT=UT)
+            self.update(z, r, UT=UT)
             means[i,:]         = self.x
             covariances[i,:,:] = self.P
 
@@ -420,7 +450,8 @@ class UnscentedKalmanFilter(object):
         means and covariances computed by the UKF. The usual input
         would come from the output of `batch_filter()`.
 
-        **Parameters**
+        Parameters
+        ----------
 
         Xs : numpy.array
            array of the means (state variable x) of the output of a Kalman
@@ -439,7 +470,8 @@ class UnscentedKalmanFilter(object):
             an array, then each element k contains the time  at step k.
             Units are seconds.
 
-        **Returns**
+        Returns
+        -------
 
         x : numpy.ndarray
            smoothed means
@@ -450,8 +482,8 @@ class UnscentedKalmanFilter(object):
         K : numpy.ndarray
             smoother gain at each step
 
-
-        **Example**
+        Examples
+        --------
 
         .. code-block:: Python
 
@@ -459,8 +491,8 @@ class UnscentedKalmanFilter(object):
 
             (mu, cov, _, _) = kalman.batch_filter(zs)
             (x, P, K) = rts_smoother(mu, cov, fk.F, fk.Q)
-
         """
+
         assert len(Xs) == len(Ps)
         n, dim_x = Xs.shape
 
@@ -475,11 +507,10 @@ class UnscentedKalmanFilter(object):
         # smoother gain
         Ks = zeros((n,dim_x,dim_x))
 
-        num_sigmas = 2*dim_x + 1
+        num_sigmas = self._num_sigmas
 
         xs, ps = Xs.copy(), Ps.copy()
         sigmas_f = zeros((num_sigmas, dim_x))
-
 
         for k in range(n-2,-1,-1):
             # create sigma points from state estimate, pass through state func
@@ -492,22 +523,22 @@ class UnscentedKalmanFilter(object):
             Pb = 0
             x = Xs[k]
             for i in range(num_sigmas):
-                y = sigmas_f[i] - x
-                Pb += self.Wm[i] * outer(y, y)
+                y = self.residual_x(sigmas_f[i], x)
+                Pb += self.Wc[i] * outer(y, y)
             Pb += Qs[k]
 
             # compute cross variance
             Pxb = 0
             for i in range(num_sigmas):
-                z = sigmas[i] - Xs[k]
-                y = sigmas_f[i] - xb
-                Pxb += self.Wm[i] * outer(z, y)
+                z = self.residual_x(sigmas[i], Xs[k])
+                y = self.residual_x(sigmas_f[i], xb)
+                Pxb += self.Wc[i] * outer(z, y)
 
             # compute gain
             K = dot(Pxb, inv(Pb))
 
             # update the smoothed estimates
-            xs[k] += dot (K, xs[k+1] - xb)
+            xs[k] += dot (K, self.residual_x(xs[k+1], xb))
             ps[k] += dot3(K, ps[k+1] - Pb, K.T)
             Ks[k] = K
 

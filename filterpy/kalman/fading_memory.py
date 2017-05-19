@@ -29,10 +29,10 @@ class FadingKalmanFilter(object):
 
     def __init__(self, alpha, dim_x, dim_z, dim_u=0):
         """ Create a Kalman filter. You are responsible for setting the
-        various state variables to reasonable values; the defaults below will
-        not give you a functional filter.
+        various state variables to reasonable values; the defaults below will not give you a functional filter.
 
-        **Parameters**
+        Parameters
+        ----------
 
         alpha : float, >= 1
             alpha controls how much you want the filter to forget past
@@ -55,12 +55,12 @@ class FadingKalmanFilter(object):
             Default value of 0 indicates it is not used.
 
 
-        **Instance Variables**
+        **Attributes**
 
         You will have to assign reasonable values to all of these before
         running the filter. All must have dtype of float
 
-        X : ndarray (dim_x, 1), default = [0,0,0...0]
+        x : ndarray (dim_x, 1), default = [0,0,0...0]
             state of the filter
 
         P : ndarray (dim_x, dim_x), default identity matrix
@@ -93,7 +93,7 @@ class FadingKalmanFilter(object):
         self.dim_z = dim_z
         self.dim_u = dim_u
 
-        self._X = zeros((dim_x,1)) # state
+        self._x = zeros((dim_x,1)) # state
         self._P = eye(dim_x)       # uncertainty covariance
         self._Q = eye(dim_x)       # process uncertainty
         self._B = 0                # control transition matrix
@@ -117,7 +117,8 @@ class FadingKalmanFilter(object):
         Add a new measurement (z) to the kalman filter. If z is None, nothing
         is changed.
 
-        **Parameters**
+        Parameters
+        ----------
 
         z : np.array
             measurement for this update.
@@ -138,7 +139,7 @@ class FadingKalmanFilter(object):
         # rename for readability and a tiny extra bit of speed
         H = self._H
         P = self._P
-        x = self._X
+        x = self._x
 
         # y = z - Hx
         # error (residual) between measurement and prediction
@@ -154,7 +155,7 @@ class FadingKalmanFilter(object):
 
         # x = x + Ky
         # predict new x with residual scaled by the kalman gain
-        self._X = x + dot(K, self._y)
+        self._x = x + dot(K, self._y)
 
         # P = (I-KH)P(I-KH)' + KRK'
         I_KH = self._I - dot(K, H)
@@ -167,7 +168,8 @@ class FadingKalmanFilter(object):
     def predict(self, u=0):
         """ Predict next position.
 
-        **Parameters**
+        Parameters
+        ----------
 
         u : np.array
             Optional control vector. If non-zero, it is multiplied by B
@@ -175,7 +177,7 @@ class FadingKalmanFilter(object):
         """
 
         # x = Fx + Bu
-        self._X = dot(self._F, self._X) + dot(self._B, u)
+        self._x = dot(self._F, self._x) + dot(self._B, u)
 
         # P = FPF' + Q
         self._P = self.alpha_sq*dot3(self._F, self._P, self._F.T) + self._Q
@@ -184,7 +186,8 @@ class FadingKalmanFilter(object):
     def batch_filter(self, zs, Rs=None, update_first=False):
         """ Batch processes a sequences of measurements.
 
-        **Parameters**
+        Parameters
+        ----------
 
         zs : list-like
             list of measurements at each time step `self.dt` Missing
@@ -199,7 +202,8 @@ class FadingKalmanFilter(object):
             controls whether the order of operations is update followed by
             predict, or predict followed by update. Default is predict->update.
 
-        **Returns**
+        Returns
+        -------
 
         means: np.array((n,dim_x,1))
             array of the state for each time step after the update. Each entry
@@ -235,20 +239,20 @@ class FadingKalmanFilter(object):
         if update_first:
             for i,(z,r) in enumerate(zip(zs,Rs)):
                 self.update(z,r)
-                means[i,:]         = self._X
+                means[i,:]         = self._x
                 covariances[i,:,:] = self._P
 
                 self.predict()
-                means_p[i,:]         = self._X
+                means_p[i,:]         = self._x
                 covariances_p[i,:,:] = self._P
         else:
             for i,(z,r) in enumerate(zip(zs,Rs)):
                 self.predict()
-                means_p[i,:]         = self._X
+                means_p[i,:]         = self._x
                 covariances_p[i,:,:] = self._P
 
                 self.update(z,r)
-                means[i,:]         = self._X
+                means[i,:]         = self._x
                 covariances[i,:,:] = self._P
 
         return (means, covariances, means_p, covariances_p)
@@ -258,18 +262,20 @@ class FadingKalmanFilter(object):
         """ Predicts the next state of the filter and returns it. Does not
         alter the state of the filter.
 
-        **Parameters**
+        Parameters
+        ----------
 
         u : np.array
             optional control input
 
-        **Returns**
+        Returns
+        -------
 
         (x, P)
             State vector and covariance array of the prediction.
         """
 
-        x = dot(self._F, self._X) + dot(self._B, u)
+        x = dot(self._F, self._x) + dot(self._B, u)
         P = self.alpha_sq*dot3(self._F, self._P, self._F.T) + self.Q
         return (x, P)
 
@@ -278,18 +284,20 @@ class FadingKalmanFilter(object):
         """ returns the residual for the given measurement (z). Does not alter
         the state of the filter.
         """
-        return z - dot(self._H, self._X)
+        return z - dot(self._H, self._x)
 
 
     def measurement_of_state(self, x):
         """ Helper function that converts a state into a measurement.
 
-        **Parameters**
+        Parameters
+        ----------
 
         x : np.array
             kalman state vector
 
-        **Returns**
+        Returns
+        -------
 
         z : np.array
             measurement corresponding to the given state
@@ -362,18 +370,8 @@ class FadingKalmanFilter(object):
 
 
     @property
-    def X(self):
-        """ filter state vector."""
-        return self._X
-
-
-    @X.setter
-    def X(self, value):
-        self._X = setter(value, self.dim_x, 1)
-
-
-    @property
     def x(self):
+        """ state vector."""
         assert False
 
     @x.setter

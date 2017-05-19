@@ -1,6 +1,9 @@
 Steps to Create Release
 =======================
+
 * update filterpy/filterpy/__init__.py with the version number.
+
+* update filterpy/filterpy/changelog.txt with the changes for this release.
 
 * 'rm *' in dist
 
@@ -20,7 +23,9 @@ Steps to Create Release
 
 * You need to manually update the documentation code at pythonhosted, PyPi's documentation server.
 
-    cd /docs/html
+    cd /docs/_build/html
+    zip -r filterpy.zip *.*
+    
     add all files to a zip file (index.html must be at base)
     go to https://pypi.python.org/pypi?%3Aaction=pkg_edit&name=filterpy
     scroll to bottom, add the zip file you just made

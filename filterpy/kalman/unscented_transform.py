@@ -22,10 +22,10 @@ def unscented_transform(sigmas, Wm, Wc, noise_cov=None,
     """ Computes unscented transform of a set of sigma points and weights.
     returns the mean and covariance in a tuple.
 
-    **Parameters**
+    Parameters
+    ----------
 
-
-    sigamas: ndarray [#sigmas per dimension, dimension]
+    sigmas: ndarray [#sigmas per dimension, dimension]
         2D array of sigma points.
 
     Wm : ndarray [# sigmas per dimension]
@@ -69,14 +69,14 @@ def unscented_transform(sigmas, Wm, Wc, noise_cov=None,
 
             def residual(a, b):
                 y = a[0] - b[0]
+                y = y % (2 * np.pi)
                 if y > np.pi:
                     y -= 2*np.pi
-                if y < -np.pi:
-                    y = 2*np.pi
                 return y
 
 
-    **Returns**
+    Returns
+    -------
 
     x : ndarray [dimension]
         Mean of the sigma points after passing through the transform.
