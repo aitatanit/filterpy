@@ -5,21 +5,14 @@ FilterPy - Kalman filters and other optimal and non-optimal estimation filters i
         :target: https://pypi.python.org/pypi/filterpy
 
 
-.. image:: https://anaconda.org/rlabbe/filterpy/badges/installer/conda.svg   
-       :target: https://conda.anaconda.org/rlabbe
-
-
-.. image:: https://anaconda.org/rlabbe/filterpy/badges/version.svg   
-       :target: https://anaconda.org/rlabbe/filterpy
-
 This library provides Kalman filtering and various related optimal and
 non-optimal filtering software written in Python. It contains Kalman
 filters, Extended Kalman filters, Unscented Kalman filters, Kalman
 smoothers, Least Squares filters, fading memory filters, g-h filters,
 discrete Bayes, and more.
 
-This is code I am developing in conjunction with my book Kalman Filters
-and Random Signals in Python, which you can read/download at
+This is code I am developing in conjunction with my book Kalman and
+Bayesian Filter in Python, which you can read/download at
 https://github.com/rlabbe/Kalman-and-Bayesian-Filters-in-Python/
 
 My aim is largely pedalogical - I opt for clear code that matches the
@@ -27,24 +20,15 @@ equations in the relevant texts on a 1-to-1 basis, even when that has a
 performance cost. There are places where this tradeoff is unclear - for
 example, I find it somewhat clearer to write a small set of equations
 using linear algebra, but numpy's overhead on small matrices makes it
-run slower than writing each equation out by hand, and books such as
-Zarchan present the written out form, not the linear algebra form. It is
-hard for me to choose which presentation is 'clearer' - it depends on
-the audience. In that case I usually opt for the faster implementation.
+run slower than writing each equation out by hand. Furthermore, books
+such Zarchan present the written out form, not the linear algebra form.
+It ishard for me to choose which presentation is 'clearer' - it depends
+on the audience. In that case I usually opt for the faster implementation.
 
 I use NumPy and SciPy for all of the computations. I have experimented
-with Numba, Continuum Analytics' just in time compiler, and it yields
-impressive speed ups with minimal costs, but I am not convinced that I
-want to add that requirement to my project. It is still on my list of
-things to figure out, however.
-
-As it evolves from alpha status I am adding documentation, tests, and
-examples, but at the moment the my book linked above serves as the best
-documentation. I am developing both in parallel, so one or the other has
-to suffer during the development phase. Reach out to me if you have
-questions or needs and I will either answer directly or shift my
-development to address your problem (assuming your question is a planned
-part of this library.
+with Numba and it yields impressive speed ups with minimal costs, but I 
+am not convinced that I want to add that requirement to my project. It 
+is still on my list of things to figure out, however.
 
 Sphinx generated documentation lives at http://filterpy.readthedocs.org/.
 Generation is triggered by git when I do a check in, so this will always
@@ -77,17 +61,16 @@ If you prefer to download the source yourself
     git clone http://github.com/rlabbe/filterpy
     python setup.py install
 
-If you use Anaconda, you can install from a conda channel. I just (Feb 2016)
-added this capability, it's quite possible it is not working yet. Please
-let me know if you run into problems.
+If you use Anaconda, you can install from the conda-forge channel. You
+will need to add the conda-forge channel if you haven't already done so:
 
-          
-.. image:: https://anaconda.org/rlabbe/filterpy/badges/installer/conda.svg   
-       :target: https://conda.anaconda.org/rlabbe
-      
 ::
+    conda config -add channels conda-forge
+    
+and then install with:
 
-    conda install -c rlabbe filterpy
+::
+    conda install filterpy
     
     
 And, if you want to install from the bleeding edge git version
