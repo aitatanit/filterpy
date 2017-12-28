@@ -131,6 +131,8 @@ class KalmanFilter(object):
         # these will always be a copy of x,P after predict() is called
         self.x_pred = zeros((dim_x,1))
         self.P_pred = eye(dim_x)
+        
+        self.log_likelihood = math.log(sys.float_info.min)
 
 
     def update(self, z, R=None, H=None):
@@ -552,7 +554,6 @@ class KalmanFilter(object):
         return (means, covariances, means_p, covariances_p)
 
 
-
     def rts_smoother(self, Xs, Ps, Fs=None, Qs=None):
         """ Runs the Rauch-Tung-Striebal Kalman smoother on a set of
         means and covariances computed by a Kalman filter. The usual input
@@ -587,6 +588,9 @@ class KalmanFilter(object):
 
         'K' : numpy.ndarray
             smoother gain at each step
+            
+        'Pp' : numpy.ndarray
+           Predicted state covariances            
 
         Examples
         --------
@@ -596,7 +600,7 @@ class KalmanFilter(object):
             zs = [t + random.randn()*4 for t in range (40)]
 
             (mu, cov, _, _) = kalman.batch_filter(zs)
-            (x, P, K) = rts_smoother(mu, cov, kf.F, kf.Q)
+            (x, P, K, Pp) = rts_smoother(mu, cov, kf.F, kf.Q)
 
         """
 
@@ -613,16 +617,16 @@ class KalmanFilter(object):
         # smoother gain
         K = zeros((n,dim_x,dim_x))
 
-        x, P = Xs.copy(), Ps.copy()
+        x, P, Pp = Xs.copy(), Ps.copy(), Ps.copy()
 
         for k in range(n-2,-1,-1):
-            P_pred = dot3(Fs[k+1], P[k], Fs[k+1].T) + Qs[k+1]
+            Pp[k] = dot3(Fs[k+1], P[k], Fs[k+1].T) + Qs[k+1]
 
-            K[k]  = dot3(P[k], Fs[k+1].T, linalg.inv(P_pred))
+            K[k]  = dot3(P[k], Fs[k+1].T, linalg.inv(Pp[k]))
             x[k] += dot(K[k], x[k+1] - dot(Fs[k+1], x[k]))
-            P[k] += dot3(K[k], P[k+1] - P_pred, K[k].T)
+            P[k] += dot3(K[k], P[k+1] - Pp[k], K[k].T)
 
-        return (x, P, K)
+        return (x, P, K, Pp)
 
 
     def get_prediction(self, u=0):
@@ -694,9 +698,12 @@ class KalmanFilter(object):
     @property
     def likelihood(self):
         """ likelihood of measurement"""
+        
         lh = math.exp(self.log_likelihood)
         if lh == 0:
             return sys.float_info.min
+        else:
+            return lh
 
 
     @alpha.setter
@@ -1045,6 +1052,8 @@ def rts_smoother(Xs, Ps, Fs, Qs):
     'K' : numpy.ndarray
         smoother gain at each step
 
+    'pP' : numpy.ndarray
+       predicted state covariances
 
     Examples
     --------
@@ -1054,7 +1063,7 @@ def rts_smoother(Xs, Ps, Fs, Qs):
         zs = [t + random.randn()*4 for t in range (40)]
 
         (mu, cov, _, _) = kalman.batch_filter(zs)
-        (x, P, K) = rts_smoother(mu, cov, kf.F, kf.Q)
+        (x, P, K, pP) = rts_smoother(mu, cov, kf.F, kf.Q)
     """
 
     assert len(Xs) == len(Ps)
@@ -1063,16 +1072,16 @@ def rts_smoother(Xs, Ps, Fs, Qs):
 
     # smoother gain
     K = zeros((n,dim_x,dim_x))
-    x, P = Xs.copy(), Ps.copy()
+    x, P, pP = Xs.copy(), Ps.copy(), Ps.copy()
 
     for k in range(n-2,-1,-1):
-        P_pred = dot3(Fs[k], P[k], Fs[k].T) + Qs[k]
+        pP[k] = dot3(Fs[k], P[k], Fs[k].T) + Qs[k]
 
-        K[k]  = dot3(P[k], Fs[k].T, linalg.inv(P_pred))
+        K[k]  = dot3(P[k], Fs[k].T, linalg.inv(pP[k]))
         x[k] += dot (K[k], x[k+1] - dot(Fs[k], x[k]))
-        P[k] += dot3 (K[k], P[k+1] - P_pred, K[k].T)
+        P[k] += dot3 (K[k], P[k+1] - pP[k], K[k].T)
 
-    return (x, P, K)
+    return (x, P, K, pP)
 
 
 class Saver(object):
