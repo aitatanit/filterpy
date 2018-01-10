@@ -19,10 +19,8 @@ for more information.
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 import numpy as np
-import scipy.linalg as linalg
 from numpy import dot, zeros, eye, asarray
-from filterpy.common import setter, setter_scalar, dot3
-
+import scipy.linalg as linalg
 
 
 class FadingKalmanFilter(object):
@@ -80,6 +78,13 @@ class FadingKalmanFilter(object):
 
         B : ndarray (dim_x, dim_u), default 0
             control transition matrix
+
+
+        Examples
+        --------
+
+        See my book Kalman and Bayesian Filters in Python
+        https://github.com/rlabbe/Kalman-and-Bayesian-Filters-in-Python
         """
 
         assert alpha >= 1
@@ -145,13 +150,15 @@ class FadingKalmanFilter(object):
         # error (residual) between measurement and prediction
         self.y = z - dot(H, x)
 
+        PHT = dot(P, H.T)
+
         # S = HPH' + R
         # project system uncertainty into measurement space
-        S = dot3(H, P, H.T) + R
+        S = dot(H, PHT) + R
 
         # K = PH'inv(S)
         # map system uncertainty into kalman gain
-        K = dot3(P, H.T, linalg.inv(S))
+        K = PHT.dot(linalg.inv(S))
 
         # x = x + Ky
         # predict new x with residual scaled by the kalman gain
@@ -159,7 +166,7 @@ class FadingKalmanFilter(object):
 
         # P = (I-KH)P(I-KH)' + KRK'
         I_KH = self.I - dot(K, H)
-        self.P = dot3(I_KH, P, I_KH.T) + dot3(K, R, K.T)
+        self.P = dot(I_KH, P).dot(I_KH.T) + dot(K, R).dot(K.T)
 
         self.S = S
         self.K = K
@@ -180,7 +187,7 @@ class FadingKalmanFilter(object):
         self.x = dot(self.F, self.x) + dot(self.B, u)
 
         # P = FPF' + Q
-        self.P = self.alpha_sq * dot3(self.F, self.P, self.F.T) + self.Q
+        self.P = self.alpha_sq * dot(self.F, self.P).dot(self.F.T) + self.Q
 
 
     def batch_filter(self, zs, Rs=None, update_first=False):
@@ -276,7 +283,7 @@ class FadingKalmanFilter(object):
         """
 
         x = dot(self.F, self.x) + dot(self.B, u)
-        P = self.alpha_sq * dot3(self.F, self.P, self.F.T) + self.Q
+        P = self.alpha_sq * dot(self.F, self.P).dot(self.F.T) + self.Q
         return (x, P)
 
 

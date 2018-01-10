@@ -178,6 +178,7 @@ Implements various Kalman filters using the linear equations form of the filter.
     :maxdepth: 1
 
     kalman/KalmanFilter
+    kalman/Saver
     kalman/FixedLagSmoother
     kalman/SquareRootFilter
     kalman/InformationFilter
@@ -214,8 +215,8 @@ Ensemble Kalman Filter
 filterpy.common
 ---------------
 
-Contains various useful functions that are not filters, but support the
-filtering classes and functions.
+Contains various useful functions that support the filtering classes 
+and functions.
 
 .. toctree::
     :maxdepth: 1

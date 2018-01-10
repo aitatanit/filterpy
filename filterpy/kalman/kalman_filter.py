@@ -15,14 +15,13 @@ This is licensed under an MIT license. See the readme.MD file
 for more information.
 """
 
-from __future__ import (absolute_import, division, unicode_literals)
-from filterpy.common import setter, setter_1d, setter_scalar, dot3
-from filterpy.stats import logpdf
+from __future__ import (absolute_import, division)
 import math
 import numpy as np
 from numpy import dot, zeros, eye, isscalar, shape
 import scipy.linalg as linalg
 import sys
+from filterpy.stats import logpdf
 
 
 class KalmanFilter(object):
@@ -62,8 +61,8 @@ class KalmanFilter(object):
 
     You may read the following attributes.
 
-    Attributes
-    ----------
+    Read Only Attributes
+    --------------------
     y : numpy.array
         Residual of the update step.
 
@@ -73,12 +72,14 @@ class KalmanFilter(object):
     S :  numpy.array
         Systen uncertaintly projected to measurement space
 
-    likelihood : scalar
-        Likelihood of last measurement update.
 
-    log_likelihood : scalar
-        Log likelihood of last measurement update.
+    Examples
+    --------
+
+    See my book Kalman and Bayesian Filters in Python
+    https://github.com/rlabbe/Kalman-and-Bayesian-Filters-in-Python
     """
+
 
     def __init__(self, dim_x, dim_z, dim_u=0):
         """ Create a Kalman filter. You are responsible for setting the
@@ -177,20 +178,18 @@ class KalmanFilter(object):
 
         # y = z - Hx
         # error (residual) between measurement and prediction
-        Hx = dot(H, x)
+        self.y = z - dot(H, x)
 
-        assert shape(Hx) == shape(z) or (shape(Hx) == (1,1) and shape(z) == (1,)), \
-               'shape of z should be {}, but it is {}'.format(
-               shape(Hx), shape(z))
-        self.y = z - Hx
+        # common subexpression for speed
+        PHT = dot(P, H.T)
 
         # S = HPH' + R
         # project system uncertainty into measurement space
-        self.S = dot3(H, P, H.T) + R
+        self.S = dot(H, PHT) + R
 
         # K = PH'inv(S)
         # map system uncertainty into kalman gain
-        self.K = dot3(P, H.T, linalg.inv(self.S))
+        self.K = PHT.dot(linalg.inv(self.S))
 
         # x = x + Ky
         # predict new x with residual scaled by the kalman gain
@@ -198,9 +197,7 @@ class KalmanFilter(object):
 
         # P = (I-KH)P(I-KH)' + KRK'
         I_KH = self.I - dot(self.K, H)
-        self.P = dot3(I_KH, P, I_KH.T) + dot3(self.K, R, self.K.T)
-
-        self.log_likelihood = logpdf(z, dot(H, x), self.S)
+        self.P = dot(I_KH, P).dot(I_KH.T) + dot(self.K, R).dot(self.K.T)
 
 
     def update_correlated(self, z, R=None, H=None):
@@ -251,20 +248,20 @@ class KalmanFilter(object):
         # error (residual) between measurement and prediction
         self.y = z - dot(H, x)
 
+        # common subexpression for speed
+        PHT = dot(P, H.T)
+
         # project system uncertainty into measurement space
-        self.S = dot3(H, P, H.T) + dot(H, M) + dot(M.T, H.T) + R
+        self.S = dot(H, PHT) + dot(H, M) + dot(M.T, H.T) + R
 
         # K = PH'inv(S)
         # map system uncertainty into kalman gain
-        self.K = dot(dot(P, H.T) + M, linalg.inv(self.S))
+        self.K = dot(PHT + M, linalg.inv(self.S))
 
         # x = x + Ky
         # predict new x with residual scaled by the kalman gain
         self.x = x + dot(self.K, self.y)
         self.P = P - dot(self.K, dot(H, P) + M.T)
-
-        # compute log likelihood
-        self.log_likelihood = logpdf(z, dot(H, x), self.S)
 
 
     def test_matrix_dimensions(self, z=None, H=None, R=None, F=None, Q=None):
@@ -403,7 +400,7 @@ class KalmanFilter(object):
         self.x = dot(F, self.x) + dot(B, u)
 
         # P = FPF' + Q
-        self.P = self._alpha_sq * dot3(F, self.P, F.T) + Q
+        self.P = self._alpha_sq * dot(F, self.P).dot(F.T) + Q
 
         self.x_pred = self.x[:]
         self.P_pred = self.P[:]
@@ -552,7 +549,6 @@ class KalmanFilter(object):
         return (means, covariances, means_p, covariances_p)
 
 
-
     def rts_smoother(self, Xs, Ps, Fs=None, Qs=None):
         """ Runs the Rauch-Tung-Striebal Kalman smoother on a set of
         means and covariances computed by a Kalman filter. The usual input
@@ -588,6 +584,9 @@ class KalmanFilter(object):
         'K' : numpy.ndarray
             smoother gain at each step
 
+        'Pp' : numpy.ndarray
+           Predicted state covariances
+
         Examples
         --------
 
@@ -596,7 +595,7 @@ class KalmanFilter(object):
             zs = [t + random.randn()*4 for t in range (40)]
 
             (mu, cov, _, _) = kalman.batch_filter(zs)
-            (x, P, K) = rts_smoother(mu, cov, kf.F, kf.Q)
+            (x, P, K, Pp) = rts_smoother(mu, cov, kf.F, kf.Q)
 
         """
 
@@ -613,16 +612,16 @@ class KalmanFilter(object):
         # smoother gain
         K = zeros((n,dim_x,dim_x))
 
-        x, P = Xs.copy(), Ps.copy()
+        x, P, Pp = Xs.copy(), Ps.copy(), Ps.copy()
 
         for k in range(n-2,-1,-1):
-            P_pred = dot3(Fs[k+1], P[k], Fs[k+1].T) + Qs[k+1]
+            Pp[k] = dot(Fs[k+1], P[k]).dot(Fs[k+1].T) + Qs[k+1]
 
-            K[k]  = dot3(P[k], Fs[k+1].T, linalg.inv(P_pred))
+            K[k]  = dot(P[k], Fs[k+1].T).dot(linalg.inv(Pp[k]))
             x[k] += dot(K[k], x[k+1] - dot(Fs[k+1], x[k]))
-            P[k] += dot3(K[k], P[k+1] - P_pred, K[k].T)
+            P[k] += dot(K[k], P[k+1] - Pp[k]).dot(K[k].T)
 
-        return (x, P, K)
+        return (x, P, K, Pp)
 
 
     def get_prediction(self, u=0):
@@ -643,7 +642,7 @@ class KalmanFilter(object):
         """
 
         x = dot(self.F, self.x) + dot(self.B, u)
-        P = self._alpha_sq * dot3(self.F, self.P, self.F.T) + self.Q
+        P = self._alpha_sq * dot(self.F, self.P).dot(self.F.T) + self.Q
         return (x, P)
 
 
@@ -691,12 +690,33 @@ class KalmanFilter(object):
         return self._alpha_sq**.5
 
 
-    @property
-    def likelihood(self):
-        """ likelihood of measurement"""
-        lh = math.exp(self.log_likelihood)
+    def log_likelihood(self, z):
+        """ log likelihood of the measurement `z`. """
+
+        if z is None:
+            return math.log(sys.float_info.min)
+        else:
+            return logpdf(z, dot(self.H, self.x), self.S)
+
+
+    def likelihood(self, z, allow_zero=False):
+        """ likelihood of measurement `z`.
+
+        Computed from the log-likelihood. the log-likelihood can be very small,
+        meaning a large negative value such as -28000. Taking the exp() of that
+        results in 0.0, which can break typical algorithms which multiply
+        by this value, so by default we always return a
+        number >= sys.float_info.min. If you want to allow zero, set allow_zero
+        to True.
+
+        But really, this is a bad measure because of the scaling that is
+        involved - try to use log-likelihood in your equations!"""
+
+        lh = math.exp(self.log_likelihood(z))
         if lh == 0:
             return sys.float_info.min
+        else:
+            return lh
 
 
     @alpha.setter
@@ -791,14 +811,14 @@ def update(x, P, z, R, H=None, return_all=False):
     y = z - dot(H, x)
 
     # project system uncertainty into measurement space
-    S = dot3(H, P, H.T) + R
+    S = dot(H, P).dot(H.T) + R
 
 
     # map system uncertainty into kalman gain
     try:
-        K = dot3(P, H.T, linalg.inv(S))
+        K = dot(P, H.T).dot(linalg.inv(S))
     except:
-        K = dot3(P, H.T, 1/S)
+        K = dot(P, H.T).dot(1/S)
 
 
     # predict new x with residual scaled by the kalman gain
@@ -812,7 +832,7 @@ def update(x, P, z, R, H=None, return_all=False):
         I_KH = np.eye(KH.shape[0]) - KH
     except:
         I_KH = np.array(1 - KH)
-    P = dot3(I_KH, P, I_KH.T) + dot3(K, R, K.T)
+    P = dot(I_KH, P).dot(I_KH.T) + dot(K, R).dot(K.T)
 
 
     if return_all:
@@ -840,18 +860,18 @@ def predict(x, P, F=1, Q=0, u=0, B=1, alpha=1.):
     F : numpy.array()
         State Transition matrix
 
-    Q : numpy.array
+    Q : numpy.array, Optional
         Process noise matrix
 
 
-    u : numpy.array, default 0.
+    u : numpy.array, Optional, default 0.
         Control vector. If non-zero, it is multiplied by B
         to create the control input into the system.
 
-    B : numpy.array, default 0.
-        Optional control transition matrix.
+    B : numpy.array, optional, default 0.
+        Control transition matrix.
 
-    alpha : float, default=1.0
+    alpha : float, Optional, default=1.0
         Fading memory setting. 1.0 gives the normal Kalman filter, and
         values slightly larger than 1.0 (such as 1.02) give a fading
         memory effect - previous measurements have less influence on the
@@ -871,7 +891,7 @@ def predict(x, P, F=1, Q=0, u=0, B=1, alpha=1.):
     if np.isscalar(F):
         F = np.array(F)
     x = dot(F, x) + dot(B, u)
-    P = (alpha * alpha) * dot3(F, P, F.T) + Q
+    P = (alpha * alpha) * dot(F, P).dot(F.T) + Q
 
     return x, P
 
@@ -888,24 +908,18 @@ def batch_filter(x, P, zs, Fs, Qs, Hs, Rs, Bs=None, us=None, update_first=False)
         represented by 'None'.
 
     Fs : list-like
-        list of values to use for the state transition matrix matrix;
-        a value of None in any position will cause the filter
-        to use `self.F` for that time step.
+        list of values to use for the state transition matrix matrix.
 
-    Qs : list-like,
+    Qs : list-like
         list of values to use for the process error
-        covariance; a value of None in any position will cause the filter
-        to use `self.Q` for that time step.
+        covariance.
 
-    Hs : list-like, optional
-        list of values to use for the measurement matrix;
-        a value of None in any position will cause the filter
-        to use `self.H` for that time step.
+    Hs : list-like
+        list of values to use for the measurement matrix.
 
-    Rs : list-like, optional
+    Rs : list-like
         list of values to use for the measurement error
-        covariance; a value of None in any position will cause the filter
-        to use `self.R` for that time step.
+        covariance.
 
     Bs : list-like, optional
         list of values to use for the control transition matrix;
@@ -917,7 +931,7 @@ def batch_filter(x, P, zs, Fs, Qs, Hs, Rs, Bs=None, us=None, update_first=False)
         a value of None in any position will cause the filter to use
         0 for that time step.
 
-    update_first : bool, optional,
+    update_first : bool, optional
         controls whether the order of operations is update followed by
         predict, or predict followed by update. Default is predict->update.
 
@@ -1027,11 +1041,9 @@ def rts_smoother(Xs, Ps, Fs, Qs):
 
     Fs : list-like collection of numpy.array
         State transition matrix of the Kalman filter at each time step.
-        Optional, if not provided the filter's self.F will be used
 
     Qs : list-like collection of numpy.array, optional
-        Process noise of the Kalman filter at each time step. Optional,
-        if not provided the filter's self.Q will be used
+        Process noise of the Kalman filter at each time step.
 
     Returns
     -------
@@ -1045,6 +1057,8 @@ def rts_smoother(Xs, Ps, Fs, Qs):
     'K' : numpy.ndarray
         smoother gain at each step
 
+    'pP' : numpy.ndarray
+       predicted state covariances
 
     Examples
     --------
@@ -1054,7 +1068,7 @@ def rts_smoother(Xs, Ps, Fs, Qs):
         zs = [t + random.randn()*4 for t in range (40)]
 
         (mu, cov, _, _) = kalman.batch_filter(zs)
-        (x, P, K) = rts_smoother(mu, cov, kf.F, kf.Q)
+        (x, P, K, pP) = rts_smoother(mu, cov, kf.F, kf.Q)
     """
 
     assert len(Xs) == len(Ps)
@@ -1063,16 +1077,16 @@ def rts_smoother(Xs, Ps, Fs, Qs):
 
     # smoother gain
     K = zeros((n,dim_x,dim_x))
-    x, P = Xs.copy(), Ps.copy()
+    x, P, pP = Xs.copy(), Ps.copy(), Ps.copy()
 
     for k in range(n-2,-1,-1):
-        P_pred = dot3(Fs[k], P[k], Fs[k].T) + Qs[k]
+        pP[k] = dot(Fs[k], P[k]).dot(Fs[k].T) + Qs[k]
 
-        K[k]  = dot3(P[k], Fs[k].T, linalg.inv(P_pred))
-        x[k] += dot (K[k], x[k+1] - dot(Fs[k], x[k]))
-        P[k] += dot3 (K[k], P[k+1] - P_pred, K[k].T)
+        K[k]  = dot(P[k], Fs[k].T).dot(linalg.inv(pP[k]))
+        x[k] += dot(K[k], x[k+1] - dot(Fs[k], x[k]))
+        P[k] += dot(K[k], P[k+1] - pP[k]).dot(K[k].T)
 
-    return (x, P, K)
+    return (x, P, K, pP)
 
 
 class Saver(object):
@@ -1084,8 +1098,8 @@ class Saver(object):
     to convert all of the lists to numpy arrays. You cannot safely call
     save() after calling to_array().
 
-    Examples
-    --------
+    Example
+    -------
 
     .. code-block:: Python
 

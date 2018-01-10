@@ -16,13 +16,19 @@ for more information.
 """
 
 from __future__ import (absolute_import, division)
-from filterpy.common import dot3
 import numpy as np
 from numpy import dot, zeros
 
 
 class IMMEstimator(object):
     """ Implements an Interacting Multiple-Model (IMM) estimator.
+
+    Examples
+    --------
+
+    See my book Kalman and Bayesian Filters in Python
+    https://github.com/rlabbe/Kalman-and-Bayesian-Filters-in-Python
+
 
     References
     ----------
@@ -39,6 +45,8 @@ class IMMEstimator(object):
 
     def __init__(self, filters, mu, M):
         """"
+        Create an IMM estimator from a list of filters.
+
         Parameters
         ----------
 
@@ -53,6 +61,7 @@ class IMMEstimator(object):
         M : (N,N) ndarray of float
             Markov chain transition matrix. M[i,j] is the probability of
             switching from filter j to filter i.
+
         """
 
         assert len(filters) > 1
@@ -93,16 +102,16 @@ class IMMEstimator(object):
         L = zeros(len(self.filters))
         for i, f in enumerate(self.filters):
             f.update(z)
-            L[i] = f.likelihood
+            L[i] = f.likelihood(z)
 
         # initial condition IMM state, covariance
         xs, Ps = [], []
         # each element j = sum M_ij * mu_i
-        
-        # cbar is the total probability, after interaction, 
+
+        # cbar is the total probability, after interaction,
         # that the target is in state j. We use it as the
         # normalization constant.
-        self.cbar = dot(self.mu, self.M) 
+        self.cbar = dot(self.mu, self.M)
 
         # compute mixing probabilities
         omega = np.zeros((self.N, self.N))
@@ -129,7 +138,7 @@ class IMMEstimator(object):
             f.x = dot(f.F, xs[i])
             if u is not None:
                 f.x += dot(f.B, u[i])
-            f.P = dot3(f.F, Ps[i], f.F.T) + f.Q
+            f.P = dot(f.F, Ps[i]).dot(f.F.T) + f.Q
 
 
         # compute mixed IMM state and covariance
