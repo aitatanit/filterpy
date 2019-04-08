@@ -9,6 +9,12 @@ will find useful when you build your filters.
 
 -----
 
+
+.. autofunction:: Saver
+
+
+-----
+
 .. autofunction:: Q_discrete_white_noise
 
 -----
@@ -34,4 +40,13 @@ will find useful when you build your filters.
 -----
 
 .. autofunction:: runge_kutta4
+
+-----
+
+.. autofunction:: inv_diagonal
+
+
+-----
+
+.. autofunction:: outer_product_sum
 
